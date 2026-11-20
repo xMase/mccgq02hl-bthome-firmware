@@ -1,0 +1,5 @@
+# Each suppression names its reason.
+# SDK entry points (called by name from SDK code) carry an inline cppcheck-suppress comment.
+# diag_anomalous is declared in diag.h as the public API of the module: the host tests and later
+# callers may use it, so it keeps external linkage.
+staticFunction:firmware/diag.c

@@ -1,0 +1,82 @@
+# Copyright (C) 2026 xMase
+# SPDX-License-Identifier: GPL-3.0-only
+# Additional permission under GNU GPL version 3 section 7: see LICENSE-EXCEPTION.
+
+project_name: mccgq02hl_bthome
+label: MCCGQ02HL BTHome v2
+description: Encrypted BTHome v2 broadcaster for the Xiaomi MCCGQ02HL door sensor (door, light, battery).
+package: Bluetooth
+quality: experimental
+component:
+  - id: sl_main
+  - id: app_os_helper
+  - id: bluetooth_stack
+  - id: bluetooth_feature_legacy_advertiser
+  - id: bluetooth_feature_system
+  # sl_bt_gap_get_identity_address (boot MAC) returns NOT_SUPPORTED without it.
+  - id: bluetooth_feature_gap
+  - id: gatt_configuration
+  # Pulls in the App Properties and bootloader_rebootAndInstall().
+  - id: bootloader_interface
+  # Moves the app start after the AppLoader bootloader (0x12000 on xG21). in_place_ota_dfu is
+  # left out: it adds an OTA characteristic to the app's GATT, and the app has no GATT.
+  - id: apploader
+  - id: app_assert
+  - id: clock_manager
+  - id: device_init
+  - id: nvm3_default
+  - id: sleeptimer
+  - id: gpiointerrupt
+  - id: emlib_iadc
+  - id: emlib_prs
+  - id: emlib_rmu
+  - id: emlib_wdog
+  - id: psa_crypto
+  - id: psa_crypto_ccm
+  - id: psa_crypto_aes
+source:
+  - path: app.c
+  - path: bthome.c
+  - path: counter.c
+  - path: diag.c
+  - path: battery.c
+  - path: door.c
+  - path: hw.c
+include:
+  - path: .
+    file_list:
+      - path: app.h
+      - path: bthome.h
+      - path: counter.h
+      - path: diag.h
+      - path: battery.h
+      - path: door.h
+      - path: hw.h
+configuration:
+  # USERDATA and DEVINFO CTUNE are blank on this unit: stock falls back to 0x85 for XI and XO.
+  - name: SL_CLOCK_MANAGER_HFXO_CTUNE
+    value: "133"
+  # Stock runs the LF tree (RTCC, EM23GRPACLK) on the LFXO with capTune 0x4F.
+  - name: SL_CLOCK_MANAGER_LFXO_EN
+    value: "1"
+  - name: SL_CLOCK_MANAGER_LFXO_CTUNE
+    value: "79"
+  - name: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE
+    value: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE_LFXO
+  # The battery conversion waits armed in EM2 for the radio TX: the IADC needs an EM2 clock.
+  - name: SL_CLOCK_MANAGER_IADCCLK_SOURCE
+    value: CMU_IADCCLKCTRL_CLKSEL_FSRCO
+  # The power manager sets EM2DBGEN in every build by default; the release build must clear it
+  # (the PPK2 measures release). hw_init sets it again in the debug build.
+  - name: SL_POWER_MANAGER_INIT_EMU_EM2_DEBUG_ENABLE
+    value: "0"
+  # BG21A010: medium-power PA from VBAT (no DC-DC), CR2032.
+  - name: SL_RAIL_UTIL_PA_SELECTION_2P4GHZ
+    value: RAIL_TX_POWER_MODE_2P4GIG_MP
+  - name: SL_RAIL_UTIL_PA_VOLTAGE_MV
+    value: "3000"
+  # Version 1.0.5 (0x00MMmmpp: major.minor.patch in the low 3 bytes); sent as object F2.
+  - name: SL_APPLICATION_VERSION
+    value: "0x00010005"
+  - name: SL_BT_CONFIG_USER_ADVERTISERS
+    value: "1"

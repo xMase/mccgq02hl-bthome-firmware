@@ -1,0 +1,13 @@
+# Flash dumps hold Xiaomi firmware and per-device secrets: never commit them.
+dumps/
+__pycache__/
+# Python environment of the README OTA setup
+/venv/
+# Scratch output of the scripts (regenerable)
+.tmp/
+# Downloaded Silicon Labs SDK and tools (regenerable, large)
+/sdk
+build/
+firmware/secrets.h
+tests/host/build/
+.tokensave/

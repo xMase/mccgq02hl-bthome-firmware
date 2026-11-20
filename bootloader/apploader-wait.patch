@@ -1,0 +1,187 @@
+Copyright (C) 2026 xMase
+SPDX-License-Identifier: Zlib
+See bootloader/LICENSE.
+
+--- a/platform/bootloader/communication/apploader/btl_apploader_common.c
++++ b/platform/bootloader/communication/apploader/btl_apploader_common.c
+@@ -46,6 +46,12 @@
+ #include <stdint.h>
+ #include <string.h>
+ 
++// MCCGQ02HL wait-loop patch (bootloader/apploader-wait.patch): bounded wait, PB0 exit, LED.
++#include "em_emu.h"
++#include "em_gpio.h"
++#include "sl_rail.h"
++#include "btl_gpio_activation_cfg.h"
++
+ // -----------------------------------------------------------------------------
+ // Defines
+ 
+@@ -59,12 +65,26 @@
+ #define SCAN_RSP_DATA                 "\x02\x0a"
+ #define SCAN_RSP_DATA_LENGTH          3
+ 
++// Wait limits, in RAIL time (microseconds, from the radio crystal; wraps after 71 min).
++#define WAIT_CONNECT_US               300000000u  // 5 min from the start of the wait ends it
++#define WAIT_DATA_US                  60000000u   // connected, 60 s without OTA data: disconnect
++#define WAIT_SESSION_US               900000000u  // 15 min from the start of the wait: disconnect, also with data
++#define PB0_STABLE_US                 50000u      // PB0 level held this long counts (debounce)
++#define LED_PERIOD_US                 2000000u    // LED PC0: one 100 ms blink every 2 s while waiting
++#define LED_ON_US                     100000u
++#define LED_DATA_PERIOD_US            250000u     // while OTA data arrives: fast blink, 50 ms on
++#define LED_DATA_ON_US                50000u
++#define DATA_ACTIVE_US                1000000u    // data arrives while the last one is younger than this
++#define LED_PORT                      gpioPortC
++#define LED_PIN                       0
++
+ // -----------------------------------------------------------------------------
+ // Static local variables
+ 
+ static volatile bool isConnected;
+ static volatile bool hasDisconnected;
+ static volatile bool started;
++static volatile uint32_t lastDataTime;
+ 
+ static ImageProperties_t *apploader_imageProps;
+ #if !defined (BOOTLOADER_NONSECURE)
+@@ -77,6 +97,22 @@
+ // -----------------------------------------------------------------------------
+ // Static local functions
+ 
++static uint32_t now(void)
++{
++  return sl_rail_get_time(SL_RAIL_EFR32_HANDLE);
++}
++
++// End of the wait: a valid app boots through the SDK's GO reset (btl_main.c), so the app finds a
++// valid reset word. With no valid app, EM4 with no wake source: only a new battery restarts.
++static int32_t waitEnd(void)
++{
++  GPIO_PinOutClear(LED_PORT, LED_PIN);
++  if (!bootload_verifyApplication(BTL_APPLICATION_BASE)) {
++    EMU_EnterEM4();
++  }
++  return BOOTLOADER_ERROR_COMMUNICATION_DONE;
++}
++
+ // -----------------------------------------------------------------------------
+ // Global Functions
+ 
+@@ -110,6 +146,7 @@
+ 
+ void bootloader_apploader_connection_complete()
+ {
++  lastDataTime = now();
+   isConnected = true;
+   hasDisconnected = false;
+   started = false;
+@@ -117,6 +154,8 @@
+ 
+ void bootloader_apploader_disconnection_complete()
+ {
++  // The commit below can block until the SE resets the chip: no LED current meanwhile.
++  GPIO_PinOutClear(LED_PORT, LED_PIN);
+   isConnected = false;
+   hasDisconnected = true;
+ 
+@@ -163,6 +202,7 @@
+ {
+   int32_t ret;
+   started = true;
++  lastDataTime = now();
+ #if defined(BOOTLOADER_NONSECURE)
+   ret = parser_parse(data,
+                      len,
+@@ -311,14 +351,68 @@
+   apploader_parseCb = parseCb;
+ #endif
+ 
++  const uint32_t start = now();
++  // PB0 may still be held from the GPIO activation: a press counts only after a release, and it
++  // acts on its release, so the GPIO activation does not see PB0 held at the next reset.
++  GPIO_PinModeSet(SL_BTL_BUTTON_PORT, SL_BTL_BUTTON_PIN, gpioModeInputPull, 1);
++  GPIO_PinModeSet(LED_PORT, LED_PIN, gpioModePushPull, 0);
++  unsigned int pb0 = GPIO_PinInGet(SL_BTL_BUTTON_PORT, SL_BTL_BUTTON_PIN);
++  uint32_t pb0Since = start;
++  bool released = false;
++  bool pressed = false;
++  uint32_t closedAt = start - WAIT_DATA_US;  // no close requested yet
++
+   while (1) {
++    // The app runs WDOG0 (~256 s). If it survives the reset into the bootloader, keep it fed.
++    if ((WDOG0->EN & WDOG_EN_EN) && !(WDOG0->SYNCBUSY & WDOG_SYNCBUSY_CMD)) {
++      WDOG0->CMD = WDOG_CMD_CLEAR;
++    }
++
+     if (isConnected) {
+       sl_apploader_run();
++      // Last data first, then the time: the difference never goes negative.
++      uint32_t last = lastDataTime;
++      uint32_t t = now();
++      if (started && t - last < DATA_ACTIVE_US && t % LED_DATA_PERIOD_US < LED_DATA_ON_US) {
++        GPIO_PinOutSet(LED_PORT, LED_PIN);
++      } else {
++        GPIO_PinOutClear(LED_PORT, LED_PIN);
++      }
++      // A close that does not end the link is retried only after another 60 s.
++      if ((t - last >= WAIT_DATA_US || t - start >= WAIT_SESSION_US) && t - closedAt >= WAIT_DATA_US) {
++        sl_apploader_disconnect();
++        closedAt = t;
++      }
++    } else if (!hasDisconnected) {
++      uint32_t t = now();
++      if ((t - start) % LED_PERIOD_US < LED_ON_US) {
++        GPIO_PinOutSet(LED_PORT, LED_PIN);
++      } else {
++        GPIO_PinOutClear(LED_PORT, LED_PIN);
++      }
++      unsigned int level = GPIO_PinInGet(SL_BTL_BUTTON_PORT, SL_BTL_BUTTON_PIN);
++      if (level != pb0) {
++        pb0 = level;
++        pb0Since = t;
++      } else if (t - pb0Since >= PB0_STABLE_US) {
++        if (level == 0u) {
++          pressed = released;
++        } else if (pressed) {
++          return waitEnd();
++        } else {
++          released = true;
++        }
++      }
++      if (t - start >= WAIT_CONNECT_US) {
++        return waitEnd();
++      }
+     }
+ 
+     if (hasDisconnected) {
+       if (!started) {
+-        return BOOTLOADER_ERROR_COMMUNICATION_DONE;
++        // No OTA data yet: advertise again; the 5 min still count from the start of the wait.
++        hasDisconnected = false;
++        sl_apploader_enable_advertising(true);
+       } else if (!apploader_imageProps->imageCompleted || !apploader_imageProps->imageVerified) {
+         return BOOTLOADER_ERROR_COMMUNICATION_IMAGE_ERROR;
+       } else {
+--- a/platform/bootloader/core/btl_main.c
++++ b/platform/bootloader/core/btl_main.c
+@@ -209,6 +209,10 @@
+   }
+ #else
+   reset_invalidateResetReason();
++  // The session consumed the intended reset (a stale SYSREQ would make the app count a later supply reset). A kept SYSREQ is harmless next to a fault bit, which always counts (same set as firmware/diag.c:5).
++  if (!(EMU->RSTCAUSE & (EMU_RSTCAUSE_WDOG0 | EMU_RSTCAUSE_WDOG1 | EMU_RSTCAUSE_LOCKUP | EMU_RSTCAUSE_SELOCKUP))) {
++    EMU->CMD_SET = EMU_CMD_RSTCAUSECLR;
++  }
+ #endif
+ 
+ #ifdef BOOTLOADER_SUPPORT_STORAGE
+@@ -548,6 +552,9 @@
+       case BOOTLOADER_RESET_REASON_BADAPP:
+         // Asked to go into bootload mode
+         return true;
++      case BOOTLOADER_RESET_REASON_GO:
++        // The AppLoader's own exit to the app: PB0 still held must not reopen it (no GPIO activation).
++        return false;
+       default:
+         break;
+     }

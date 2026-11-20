@@ -1,0 +1,55 @@
+# Copyright (C) 2026 xMase
+# SPDX-License-Identifier: GPL-3.0-only
+# Additional permission under GNU GPL version 3 section 7: see LICENSE-EXCEPTION.
+
+project_name: ota_speed
+label: GATT write-speed spike
+description: Throwaway spike. Counts bytes written without response to one characteristic, to measure the ESPHome proxy path before the AppLoader OTA.
+package: Bluetooth
+quality: experimental
+component:
+  - id: sl_main
+  - id: app_os_helper
+  - id: bluetooth_stack
+  - id: bluetooth_feature_legacy_advertiser
+  - id: bluetooth_feature_connection_role_peripheral
+  - id: bluetooth_feature_gatt
+  - id: bluetooth_feature_gatt_server
+  - id: bluetooth_feature_system
+  - id: gatt_configuration
+  # Same app base (0x4000, 16 kB stock bootloader) as the main app. in_place_ota_dfu stays out.
+  # bluetooth_feature_sm is left out on purpose: no security manager, no bonding, no key storage.
+  - id: bootloader_interface
+  - id: app_assert
+  - id: clock_manager
+  - id: device_init
+  # Same NVM3 instance as the main app: 40 kB at 0x74000-0x7DFFF. The spike never writes it.
+  - id: nvm3_default
+source:
+  - path: app.c
+include:
+  - path: .
+    file_list:
+      - path: app.h
+config_file:
+  - override:
+      component: gatt_configuration
+      file_id: gatt_configuration_file_id
+    path: gatt.btconf
+    directory: btconf
+configuration:
+  # Radio and clock settings of the main app (see firmware/mccgq02hl_bthome.slcp).
+  - name: SL_CLOCK_MANAGER_HFXO_CTUNE
+    value: "133"
+  - name: SL_CLOCK_MANAGER_LFXO_EN
+    value: "1"
+  - name: SL_CLOCK_MANAGER_LFXO_CTUNE
+    value: "79"
+  - name: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE
+    value: SL_CLOCK_MANAGER_DEFAULT_LF_CLOCK_SOURCE_LFXO
+  - name: SL_RAIL_UTIL_PA_SELECTION_2P4GHZ
+    value: RAIL_TX_POWER_MODE_2P4GIG_MP
+  - name: SL_RAIL_UTIL_PA_VOLTAGE_MV
+    value: "3000"
+  - name: SL_BT_CONFIG_USER_ADVERTISERS
+    value: "1"

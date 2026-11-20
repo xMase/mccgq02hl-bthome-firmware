@@ -1,0 +1,30 @@
+# Settings for the Python checks of scripts/quality-check.sh (the project is not a package).
+[tool.ruff]
+line-length = 120
+extend-exclude = ["sdk", "dumps", "build", ".tmp"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+
+[tool.mypy]
+python_version = "3.14"
+cache_dir = ".tmp/quality/mypy-cache"
+check_untyped_defs = true
+
+[tool.vulture]
+min_confidence = 60
+
+[tool.deptry]
+requirements_files = ["tools/requirements.in"]
+# bthome-ble and habluetooth are imported only by tests/ (check_bthome.py, capture_decode.py), which deptry
+# counts as development code.
+per_rule_ignores = { DEP002 = ["bthome-ble", "habluetooth"] }
+extend_exclude = ["sdk", "dumps", "build"]
+
+[tool.bandit]
+exclude_dirs = ["sdk", "dumps", "build", ".tmp"]
+
+[tool.bandit.assert_used]
+# Tests use assert as their check and are not on the release path; tools/ uses
+# explicit exits, because -O strips asserts.
+skips = ["*/tests/*"]

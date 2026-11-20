@@ -1,0 +1,55 @@
+# Copyright (C) 2026 xMase
+# SPDX-License-Identifier: Zlib
+# See bootloader/LICENSE.
+
+project_name: bootloader
+label: MCCGQ02HL AppLoader bootloader
+description: >
+  Gecko Bootloader with the Bluetooth AppLoader (SDK sample bootloader-apploader), PB0 GPIO
+  activation and this project's wait-loop patch (apploader-wait.patch, applied by build.sh).
+package: bootloader
+quality: experimental
+component:
+  - id: bootloader_core
+  - id: bootloader_apploader
+  - id: bootloader_image_parser
+  - id: bootloader_gpio_activation
+  # Provides debug/btl_debug.h, which the core includes; prints stay off (btl_debug_cfg.h).
+  - id: bootloader_debug
+config_file:
+  # PB0, active low (the SDK template leaves the pin unset; slc configuration cannot set pin-tool pins).
+  - path: config/btl_gpio_activation_cfg.h
+    override:
+      component: bootloader_gpio_activation
+      file_id: btl_gpio_activation_cfg
+configuration:
+  # App writes from a GBL stop at 0x74000 (default: flash end), so an oversized image cannot reach NVM3.
+  - name: USE_CUSTOM_APP_SIZE
+    value: "1"
+  - name: CUSTOM_BTL_APP_SPACE_SIZE
+    value: "0x62000"
+  # Staged copy of a bootloader upgrade: in the app area (0x12000-0x73FFF), never in NVM3.
+  - name: BTL_UPGRADE_LOCATION_BASE
+    value: "0x18000UL"
+  # No enforced signature, encryption or secure boot (spec, "Boot chain and flash layout").
+  - name: BOOTLOADER_ENFORCE_SIGNED_UPGRADE
+    value: "0"
+  - name: BOOTLOADER_ENFORCE_ENCRYPTED_UPGRADE
+    value: "0"
+  - name: BOOTLOADER_ENFORCE_SECURE_BOOT
+    value: "0"
+  # SDK default 3; each bootloader build that is to replace an installed one gets +1 (the
+  # AppLoader installs a bootloader upgrade only if its version is higher than the running one).
+  - name: BOOTLOADER_VERSION_MAIN_CUSTOMER
+    value: "6"
+  - name: BTL_APPLOADER_DEVICE_NAME
+    value: '"OTA"'
+  - name: BTL_APPLOADER_USE_RANDOM_ADDRESS
+    value: "0"
+  # Board calibration, same values as firmware/mccgq02hl_bthome.slcp (HFXO CTUNE, PA from VBAT).
+  - name: SL_DEVICE_INIT_HFXO_CTUNE
+    value: "133"
+  - name: SL_RAIL_UTIL_PA_SELECTION_2P4GHZ
+    value: RAIL_TX_POWER_MODE_2P4GIG_MP
+  - name: SL_RAIL_UTIL_PA_VOLTAGE_MV
+    value: "3000"

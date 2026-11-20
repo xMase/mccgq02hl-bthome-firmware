@@ -1,0 +1,6 @@
+# Image for the C checks of scripts/quality-check.sh: clang-format, clang-tidy, cppcheck.
+# Exact NVRs: the build fails when Fedora retires one, and the owner then picks the new version.
+FROM registry.fedoraproject.org/fedora:44@sha256:50ab7dd5a71732975b6a1f19108df021b61254f3a507e68ac8abb5fb0bceb308
+RUN dnf install -y --setopt=install_weak_deps=False \
+      cppcheck-2.22.0-1.fc44 clang-tools-extra-22.1.8-4.fc44 clang-22.1.8-4.fc44 \
+    && dnf clean all

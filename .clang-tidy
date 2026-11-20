@@ -1,0 +1,22 @@
+# Run by scripts/quality-check.sh on firmware/*.c with the SDK flags of build/release, without
+# BUILD_RELEASE: the debug configuration, a superset of the release lines.
+# Only firmware/ headers are reported: SDK headers are vendor code.
+# Disabled, with the reason:
+#  - clang-analyzer-core.FixedAddressDereference: memory-mapped registers are fixed addresses.
+#  - clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling: it asks for C11
+#    Annex K (memcpy_s, memset_s), which newlib does not provide.
+#  - bugprone-easily-swappable-parameters: it flags every function with two adjacent parameters
+#    of one type, which is most of the small C APIs here (offset, length).
+Checks: >-
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  misc-header-include-cycle,
+  clang-analyzer-*,
+  -clang-analyzer-core.FixedAddressDereference,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+HeaderFilterRegex: '^/src/firmware/'
+WarningsAsErrors: '*'
+CheckOptions:
+  # Vendor header cycles (the SDK guards them): only cycles among our own headers count.
+  misc-header-include-cycle.IgnoredFilesList: 'nvm3_generic\.h|nvm3_default\.h|sl_mbedtls_config\.h|build_info\.h'

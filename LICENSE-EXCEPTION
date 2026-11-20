@@ -1,0 +1,10 @@
+Additional permission under GNU GPL version 3 section 7
+
+This permission applies to every file of this program that is licensed under the GNU General
+Public License version 3 (see LICENSE). The files in bootloader/ are licensed under the Zlib
+license instead (see bootloader/LICENSE).
+
+If you modify this Program, or any covered work, by linking or combining it with the Silicon Labs
+Simplicity SDK (or a modified version of that library), containing parts covered by the terms of
+the Silicon Labs Master Software License Agreement (MSLA), the licensors of this Program grant you
+additional permission to convey the resulting work.

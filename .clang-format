@@ -1,0 +1,12 @@
+BasedOnStyle: Google
+IndentWidth: 2
+BreakBeforeBraces: Custom
+BraceWrapping: {AfterFunction: true}
+SortIncludes: Never
+AllowShortFunctionsOnASingleLine: None
+PointerAlignment: Right
+DerivePointerAlignment: false
+SpacesBeforeTrailingComments: 2
+ColumnLimit: 0
+Cpp11BracedListStyle: false
+AlignTrailingComments: {Kind: Always, OverEmptyLines: 0}

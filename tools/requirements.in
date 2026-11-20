@@ -1,0 +1,5 @@
+# Direct dependencies of tools/*.py and tests/*.py. Compile with:
+#   pip-compile --generate-hashes --allow-unsafe -o requirements.txt requirements.in
+aioesphomeapi==46.30.0
+bthome-ble==3.25.0
+habluetooth==7.1.2
