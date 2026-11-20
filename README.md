@@ -96,14 +96,42 @@ Notes:
   (snapshot 2026-07-11) from Fedora has it. `swd/60-debugprobe.rules` is a udev rule for the probe
   (`2e8a:000c`), so OpenOCD runs without root.
 
+## Ready-made files
+
+Each GitHub release carries ready-made files, built by `.github/workflows/release.yml` from the
+release tag with the pinned SDK and tools. With them you need no SDK. Check them first:
+`sha256sum -c SHA256SUMS`.
+
+| File | Build output it replaces |
+|------|--------------------------|
+| `bootloader-crc.bin` | `build/bootloader/bootloader-crc.bin` |
+| `bootloader.gbl` | `build/bootloader/bootloader.gbl` |
+| `mccgq02hl_bthome-debug-crc.bin` | `build/debug/build/debug/mccgq02hl_bthome-crc.bin` |
+| `mccgq02hl_bthome-debug.out` | `build/debug/build/debug/mccgq02hl_bthome.out` |
+| `mccgq02hl_bthome-release-crc.bin` | `build/release/build/release/mccgq02hl_bthome-crc.bin` |
+| `mccgq02hl_bthome-release.gbl` | `build/release/build/release/mccgq02hl_bthome.gbl` |
+
+In the commands below, pass the ready-made file where a command names the build output. To check
+a release against its source, check out the tag and run `tools/sdk-fetch.sh`, then
+`scripts/release-files.sh dist <tag>`, and compare `dist/SHA256SUMS` with the release one. Every
+file except the debug `.out` (it holds the build paths) must match. In a test, a checkout at `/w` gave
+other images: `slc` wrote absolute source paths there and linked the files in another order.
+
 ## Build
 
-You need Simplicity SDK 2025.6.3, slc-cli 6.0.25, Java 21, Arm GCC 14.2.rel1 and Simplicity
-Commander 1v25. All of them live under `sdk/` (gitignored). The setup steps are in the comments
-of `tools/sdk-env.sh`. In short: install `slc-cli` and `gcc-arm-none-eabi` with `slt` under
-`sdk/home`, unzip the SDK into `sdk/simplicity_sdk`, then run `slc configuration` and
-`slc signature trust`. `slc` reads its configuration from `HOME=$PWD/sdk/home`, never from your real
-home.
+You need Simplicity SDK 2025.6.3, slc-cli 6.0.25, the Silicon Labs Python 3.10.4 and Java 21
+packs, Arm GCC 14.2.rel1 and Simplicity Commander 1v25. All of them live under `sdk/`
+(gitignored). `tools/sdk-fetch.sh` downloads them (about 1.1 GB, 3.5 GB unpacked), checks each
+archive against a pinned SHA-256, unpacks them and configures `slc`, on any x86_64 Linux.
+Simplicity Commander needs libGL, GLib and D-Bus (on Ubuntu: `libgl1 libglib2.0-0t64 libdbus-1-3`).
+A manual setup with Silicon Labs `slt` also works: see the comments in `tools/sdk-env.sh`.
+
+```bash
+tools/sdk-fetch.sh
+```
+
+`slc` keeps its configuration in `sdk/home` (the scripts set `HOME=$PWD/sdk/home`), but it writes
+the SDK trust into your real home (`~/SimplicityStudio`, `~/.config/SimplicityStudio`).
 
 ```bash
 ./build.sh            # debug build
@@ -116,7 +144,7 @@ Outputs, all under `build/` (gitignored):
 | Build | File | Use |
 |-------|------|-----|
 | release | `build/release/build/release/mccgq02hl_bthome-crc.bin` | flash over SWD |
-| release | `build/release/build/release/mccgq02hl_bthome-crc.s37` | OTA input |
+| release | `build/release/build/release/mccgq02hl_bthome.gbl` | OTA input |
 | debug | `build/debug/build/debug/mccgq02hl_bthome-crc.bin` and `.out` | flash and provisioning over SWD |
 | bootloader | `build/bootloader/bootloader-crc.bin` | flash over SWD |
 | bootloader | `build/bootloader/bootloader.gbl` | OTA bootloader upgrade |
@@ -210,6 +238,10 @@ the reset count in Home Assistant, because it restarts the chip.
 ```bash
 distrobox enter efr32 -- openocd -f swd/provision-bindkey.tcl
 ```
+
+The script reads the addresses of `main` and the hand-off from the debug `.out` with the SDK `nm`,
+or with `arm-none-eabi-nm` or `nm` from your PATH. With the ready-made files, pass the `.out`:
+`-c "set ELF <path>/mccgq02hl_bthome-debug.out"` before `-f`.
 
 Now install the release build with the same `flash-app.tcl` command, using the release `-crc.bin`.
 NVM3 is kept, so the key stays.
@@ -332,6 +364,11 @@ scripts/quality-check.sh [target...]
 
 Targets: `lint format types secrets sast vulns structure coverage contracts debt`. No target runs
 all. Tools, versions and limits are in [`docs/quality-gate.md`](docs/quality-gate.md).
+
+A release is a pushed tag `vMAJOR.MINOR.PATCH` equal to `SL_APPLICATION_VERSION` in
+`firmware/mccgq02hl_bthome.slcp`. The workflow `.github/workflows/release.yml` then runs
+`tools/sdk-fetch.sh` and `scripts/release-files.sh`, and publishes the files with the notes in
+`docs/release-notes.md`.
 
 ## License
 

@@ -4,7 +4,8 @@
 # Additional permission under GNU GPL version 3 section 7: see LICENSE-EXCEPTION.
 
 # Build the firmware: ./build.sh (debug), ./build.sh release, or ./build.sh bootloader.
-# Output: build/{debug,release}/build/{debug,release}/mccgq02hl_bthome-crc.bin (flash this one)
+# Output: build/{debug,release}/build/{debug,release}/mccgq02hl_bthome-crc.bin (flash this one),
+#         mccgq02hl_bthome.gbl next to it (for tools/ota.py)
 #         build/bootloader/bootloader-crc.bin, build/bootloader/bootloader.gbl (GBL with only the
 #         bootloader, for tools/ota.py)
 set -euo pipefail
@@ -36,11 +37,11 @@ trap 'rm -rf "$OUT"' ERR
 if [ "$MODE" = bootloader ]; then
   # -cp copies the SDK sources into $OUT, so the wait-loop patch changes the copy, never sdk/.
   HOME=$PWD/sdk/home slc generate -p "$SLCP" -d "$OUT" \
-    --with EFR32BG21A010F512IM32 -o makefile -cp > /dev/null
+    --with EFR32BG21A010F512IM32 -o makefile "${SLC_TOOLS[@]}" -cp > /dev/null
   patch -d "$OUT"/simplicity_sdk_* -p1 --fuzz=0 --no-backup-if-mismatch < bootloader/apploader-wait.patch
 else
   HOME=$PWD/sdk/home slc generate -p "$SLCP" -d "$OUT" \
-    --with EFR32BG21A010F512IM32 -o makefile > /dev/null
+    --with EFR32BG21A010F512IM32 -o makefile "${SLC_TOOLS[@]}" > /dev/null
 fi
 make -C "$OUT" -f "$PROJECT.Makefile" -j8 "$TARGET" ARM_GCC_DIR_LINUX="$GCC_DIR" "${FLAGS[@]}"
 case $MODE in
@@ -66,5 +67,7 @@ case $MODE in
     # The same image with addresses (S-record), the default input of tools/ota.py: written only
     # after both checks pass. A GBL made from the .bin would aim at 0x0.
     "$COMMANDER" convert "$OUT/build/$MODE/$PROJECT.out" --crc -o "$OUT/build/$MODE/$PROJECT-crc.s37"
+    # The GBL that tools/ota.py would make from the .s37: OTA without Simplicity Commander.
+    "$COMMANDER" gbl create "$OUT/build/$MODE/$PROJECT.gbl" --app "$OUT/build/$MODE/$PROJECT-crc.s37"
     ;;
 esac

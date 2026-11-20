@@ -40,6 +40,7 @@ PYBIN=$Q/venv/bin
 SHELLCHECK_IMAGE=docker.io/koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 SHFMT_IMAGE=docker.io/mvdan/shfmt:v3.14.1@sha256:8c06884a35683d8763fba6c0d9484d11a61a96da65f8d497d6f625825a6043f2
 GITLEAKS_IMAGE=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+ACTIONLINT_IMAGE=docker.io/rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 GRYPE_IMAGE=docker.io/anchore/grype:v0.122.1@sha256:661583704a253c0448ed63998b5ea2cd9d5a76ee71eedc4aed439b8ce3e93a1c
 CIMAGE=localhost/mccgq02hl-quality:$(sha256sum tools/quality/Containerfile | cut -c1-12)
 PODMAN=(podman run --rm --security-opt label=disable -v "$ROOT:/src" -w /src)
@@ -70,6 +71,7 @@ setup_release_build() {
 files() { git ls-files -co --exclude-standard -- "$@"; }
 PY=$(files '*.py')
 SH=$(files '*.sh')
+YML=$(files '*.yml' '*.yaml')
 C_ALL=$(files '*.c' '*.h')
 # The generated Silicon Labs files are not tracked; every tracked C file is project code.
 
@@ -90,6 +92,8 @@ check() { # check <name> <function>
 
 # --- lint -------------------------------------------------------------------------------------
 c_ruff() { "$PYBIN/ruff" check --no-cache $PY; }
+# actionlint also runs shellcheck on the run: blocks of the workflows.
+c_actionlint() { "${PODMAN[@]}" "$ACTIONLINT_IMAGE"; }
 c_shellcheck() { "${PODMAN[@]}" "$SHELLCHECK_IMAGE" -x -P /src $SH; }
 c_clang_tidy() {
   setup_release_build || {
@@ -119,6 +123,17 @@ c_clang_tidy() {
 # --- format -----------------------------------------------------------------------------------
 c_ruff_format() { "$PYBIN/ruff" format --no-cache --check $PY; }
 c_clang_format() { "${PODMAN[@]}" "$CIMAGE" clang-format --dry-run --Werror $C_ALL; }
+YAMLFMT=$Q/bin/yamlfmt-0.21.0
+c_yamlfmt() {
+  if [ ! -x "$YAMLFMT" ]; then
+    local tgz=$Q/yamlfmt.tar.gz
+    mkdir -p "$Q/bin" &&
+      curl -fsSL -o "$tgz" https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_x86_64.tar.gz &&
+      echo "1f300d9257b232bb3b541d7fb1b0e6b3c121bcbab381c86cd38cb8722be8a566  $tgz" | sha256sum -c --quiet &&
+      tar -xzf "$tgz" -C "$Q/bin" yamlfmt && mv "$Q/bin/yamlfmt" "$YAMLFMT" || return 1
+  fi
+  "$YAMLFMT" -lint $YML
+}
 c_shfmt() { "${PODMAN[@]}" "$SHFMT_IMAGE" -i 2 -ci -sr -d $SH; }
 
 # --- types ------------------------------------------------------------------------------------
@@ -154,6 +169,8 @@ c_cppcheck() {
     -I firmware --template='{file}:{line}: {severity}: {id}: {message}' -q firmware tests/host
 }
 c_bandit() { "$PYBIN/bandit" -q -c pyproject.toml -r $PY; }
+# --offline: no GitHub API calls; the audits that need them are skipped.
+c_zizmor() { "$PYBIN/zizmor" --offline --no-progress $YML; }
 
 # --- vulns ------------------------------------------------------------------------------------
 c_grype() {
@@ -319,12 +336,14 @@ done
 want lint && {
   check ruff c_ruff
   check shellcheck c_shellcheck
+  check actionlint c_actionlint
   check clang-tidy c_clang_tidy
 }
 want format && {
   check ruff-format c_ruff_format
   check clang-format c_clang_format
   check shfmt c_shfmt
+  check yamlfmt c_yamlfmt
 }
 want types && {
   check mypy c_mypy
@@ -335,6 +354,7 @@ want secrets && check gitleaks c_gitleaks
 want sast && {
   check cppcheck c_cppcheck
   check bandit c_bandit
+  check zizmor c_zizmor
 }
 want vulns && check grype c_grype
 want structure && {

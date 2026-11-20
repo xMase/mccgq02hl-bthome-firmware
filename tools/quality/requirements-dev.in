@@ -11,3 +11,4 @@ vulture==2.16
 deptry==0.25.1
 gcovr==8.8
 coverage==7.17.3
+zizmor==1.32.0

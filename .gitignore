@@ -8,6 +8,8 @@ __pycache__/
 # Downloaded Silicon Labs SDK and tools (regenerable, large)
 /sdk
 build/
+# Release files of scripts/release-files.sh
+/dist/
 firmware/secrets.h
 tests/host/build/
 .tokensave/

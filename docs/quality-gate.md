@@ -43,7 +43,16 @@ Approved tools (2026-11-19; do not substitute without the owner's approval):
 | Unused dependencies, Python | deptry | 0.25.1 | MIT | pypi.org/project/deptry | none | 2026-03-18 / 2026-11-09 / 1 |
 | Coverage, C host tests | gcovr (gcc `--coverage`) | 8.8 | BSD-3-Clause | pypi.org/project/gcovr | lcov: no fail-under | 2026-10-27 / 2026-11-12 / 3 core |
 | Coverage, Python | coverage.py | 7.17.3 | Apache-2.0 | pypi.org/project/coverage | pytest-cov: only a wrapper | 2026-11-12 / 2026-11-19 / 1 main + contributors |
+| Lint, GitHub Actions | actionlint (image with shellcheck for the `run:` blocks) | 1.7.12, `rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667` | MIT | github.com/rhysd/actionlint | yamllint: YAML syntax only, no Actions schema | 2026-03-30 / 2026-04-19 / about 4, one main |
+| Format check, YAML | yamlfmt `-lint` (defaults) | 0.21.0, `yamlfmt_0.21.0_Linux_x86_64.tar.gz` + sha256 from `checksums.txt` | Apache-2.0 | github.com/google/yamlfmt | yamllint: linter, not formatter | 2026-01-05 / 2026-10-13 / about 8 |
+| SAST, GitHub Actions | zizmor `--offline` | 1.32.0, PyPI, hashed in `tools/quality/requirements-dev.txt` | MIT | github.com/zizmorcore/zizmor | poutine: telemetry on by default | 2026-11-02 / 2026-11-19 / about 3, one main |
 | Own scripts | layer boundaries, unused files, flash-map contract, long files, `shortcut:` list | | | `scripts/quality-check.sh` | |  |
+
+The three GitHub Actions tools (approved 2026-11-20) cover the release workflow
+(`.github/workflows/`), which is release-path code: lint, format and SAST only. The gate downloads
+yamlfmt into `.tmp/quality/bin/` and checks its pinned SHA-256. Not verified: that actionlint and
+yamlfmt send no telemetry (their docs are silent). The release scripts `tools/sdk-fetch.sh` and
+`scripts/release-files.sh` are shell, so shellcheck and shfmt cover them.
 
 Exception (approved 2026-11-19): shellcheck 0.11.0 (2025-08-04) is older than the 12-month release
 rule, but it is the newest release, the repository is active and no other tool lints shell for bugs.

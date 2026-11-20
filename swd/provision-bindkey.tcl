@@ -54,13 +54,23 @@ if {[llength $key] != 16} {
     shutdown
 }
 
-set nm [lindex [glob -nocomplain sdk/home/.silabs/slt/installs/conan/p/gcc-*/p/bin/arm-none-eabi-nm] 0]
-if {![file exists $ELF] || $nm eq ""} {
-    echo "RESULT: ELF $ELF or the SDK nm is missing; nothing written"
+if {![file exists $ELF]} {
+    echo "RESULT: ELF $ELF is missing; nothing written"
     shutdown
 }
-if {[catch {exec $nm $ELF} nm_out]} {
-    echo "RESULT: nm failed on $ELF; nothing written"
+# The SDK nm (either sdk/ layout), else one on PATH: users of the ready-made files have no SDK.
+set nms [glob -nocomplain sdk/gcc/bin/arm-none-eabi-nm]
+lappend nms {*}[glob -nocomplain sdk/home/.silabs/slt/installs/conan/p/gcc-*/p/bin/arm-none-eabi-nm]
+lappend nms arm-none-eabi-nm nm
+set nm_out ""
+foreach nm $nms {
+    if {![catch {exec $nm $ELF} out]} {
+        set nm_out $out
+        break
+    }
+}
+if {$nm_out eq ""} {
+    echo "RESULT: no nm read $ELF (SDK nm, arm-none-eabi-nm, nm); nothing written"
     shutdown
 }
 set main_addr [sym_addr $nm_out main]
